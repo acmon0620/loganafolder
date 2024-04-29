@@ -1,4 +1,4 @@
-#v039 データアップのサイドバー化
+#v040 データアップのサイドバー化
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -7,7 +7,7 @@ import plotly.express as px
 from scipy.stats import skew, kurtosis, anderson, shapiro, boxcox
 import func
 
-footer_text = "Ver.0.39"
+footer_text = "Ver.0.40"
 
 st.markdown(
     f"""
@@ -67,14 +67,14 @@ else:
     clk = 333
 
 if type == 'BUF':
-    stand = 35
-    ten_st = 29
-    ten_ed = 57
-    km_st = 220
-    km_ed = 248
-    d_st = 137
-    d_ed = 151
-    dd = 2
+    stand = 35  # 基準角度
+    ten_st = 29 # 天秤開始角度
+    ten_ed = 57 # 天秤終了角度
+    km_st = 220 # 釜開始角度
+    km_ed = 248 # 釜終了角度
+    d_st = 137  # 出会い開始角度
+    d_ed = 151  # 出会い終了角度
+    dd = 2      # 区間2倍
 elif type == 'DA':
     stand = 253
     ten_st = 29
@@ -174,34 +174,21 @@ if __name__ == "__main__":
             for i in range(len(n_array)):  # 指定区間の総和値をsowa配列に保存する
                 sowa[i] = np.sum(w_array[file_no,i,stt:end,6]) - np.sum(w_array[file_no,i,dstt:dend,6])*dd  # 出会い区間128:156
 
-            # 不良フラグ
-            if option == '糸切れ':
-                defect_type = 3
-            if option == '目飛び':
-                defect_type = 4
-            if option == '締り1':
-                defect_type = 5
-            if option == '締り2':
-                defect_type = 7
-            if option == '締り3':
-                defect_type = 8
-            if option2 == '糸切れ':
-                defect_type2 = 3
-            if option2 == '目飛び':
-                defect_type2 = 4
-            if option2 == '締り1':
-                defect_type2 = 5
-            if option2 == '締り2':
-                defect_type2 = 7
-            if option2 == '締り3':
-                defect_type2 = 8
+            # 各不良のデータ列
+            errorlist = {
+                '糸切れ' : 3,
+                '目飛び' : 4,
+                '締り1' : 5,
+                '締り2' : 7,
+                '締り3' : 8
+            }
 
             # 不良フラグ
             flag = np.arange(len(n_array))  # 1針毎の総和値を入れる配列を作成
             flag2 = np.arange(len(n_array))
             for i in range(len(n_array)):  # 指定区間の総和値をflag配列に保存する
-                flag[i] = np.sum(w_array[file_no,i,:,defect_type])
-                flag2[i] = np.sum(w_array[file_no,i,:,defect_type2])
+                flag[i] = np.sum(w_array[file_no,i,:,errorlist[option]])
+                flag2[i] = np.sum(w_array[file_no,i,:,errorlist[option2]])
 
             # 速度フラグ
             speed = np.arange(len(n_array))
@@ -316,7 +303,6 @@ if __name__ == "__main__":
                 with col3:
                     w_dstt = st.number_input('出会い開始位相.', value=d_st)
                     st.markdown(f"<span style='font-size: 12px;'>換算</span> {w_dstt * 1.40625}°", unsafe_allow_html=True)
-
                 with col4:
                     w_dend = st.number_input('出会い終了位相.', value=d_ed)
                     st.markdown(f"<span style='font-size: 12px;'>換算</span> {w_dend * 1.40625}°", unsafe_allow_html=True)
@@ -478,39 +464,32 @@ if __name__ == "__main__":
                 x[i] = i+1
 
             # 総和張力算出
-            nwsowa = np.zeros((len(w_array), len(n_array)))  # ワークx針数の配列を作成
+            nwsowa = np.zeros((len(w_array), len(n_array))) # ワークx針数の配列を作成
+            nwpeak = np.zeros((len(w_array), len(n_array))) # peak値
+            nwphase = np.zeros((len(w_array), len(n_array))) # peak位相
             for w in range(len(w_array)):
                 for nd in range(len(n_array)):  # 指定区間の総和値をsowa配列に保存する
                     nwsowa[w, nd] = np.sum(w_array[w,nd,w_stt:w_end,6]) - np.sum(w_array[w,nd,w_dstt:w_dend,6])*dd  # 出会い区間128:156
-            # 標準偏差算出
-            std = np.zeros(len(n_array))
-            for i in range(len(n_array)):
-                std[i] = np.std(nwsowa[:,i])
-            # 平均張力算出
-            ave = np.zeros(len(n_array))
-            for i in range(len(n_array)):
-                ave[i] = np.mean(nwsowa[:,i])
-            # 尖度の計算
-            kurt_box = np.zeros(len(n_array))
-            for i in range(len(n_array)):
-                kurt_box[i] = kurtosis(nwsowa[:,i])
-            # 歪度の算出
-            skew_box = np.zeros(len(n_array))
-            for i in range(len(n_array)):
-                skew_box[i] = skew(nwsowa[:,i])
-            # Shapiro-Wilk検定
-            shap_box = np.zeros(len(n_array))
-            for i in range(len(n_array)):
-                shap_box[i] = shapiro(nwsowa[:,i]).pvalue
-            # Anderson–Darling検定
-            ander_box = np.zeros(len(n_array))
-            for i in range(len(n_array)):
-                ander_box[i] = anderson(nwsowa[:,i]).statistic
+                    nwpeak[w, nd] = np.amax(w_array[w,nd,w_stt:w_end,6])
+                    nwphase[w, nd] = np.argmax(w_array[w,nd,w_stt:w_end,6]) * 1.40625 + w_stt * 1.40625
+
+            std = np.zeros(len(n_array))        # 標準偏差算出
+            ave = np.zeros(len(n_array))        # 平均張力算出
+            kurt_box = np.zeros(len(n_array))   # 尖度の計算
+            skew_box = np.zeros(len(n_array))   # 歪度の算出
+            shap_box = np.zeros(len(n_array))   # Shapiro-Wilk検定
+            ander_box = np.zeros(len(n_array))  # Anderson–Darling検定
             # boxcox変換
             nw_boxcox = np.zeros((len(n_array), len(w_array)))
             shap_boxcox = np.zeros(len(n_array))
             ander_boxcox = np.zeros(len(n_array))
             for i in range(len(n_array)):
+                std[i] = np.std(nwsowa[:,i])
+                ave[i] = np.mean(nwsowa[:,i])
+                kurt_box[i] = kurtosis(nwsowa[:,i])
+                skew_box[i] = skew(nwsowa[:,i])
+                shap_box[i] = shapiro(nwsowa[:,i]).pvalue
+                ander_box[i] = anderson(nwsowa[:,i]).statistic
                 transformed_data, _ = boxcox(nwsowa[:, i])
                 nw_boxcox[i, :] = transformed_data
                 shap_boxcox[i] = shapiro(nw_boxcox[i,:]).pvalue
@@ -518,11 +497,21 @@ if __name__ == "__main__":
 
             # データ一覧化
             joho = []
+            joho_peak = []
+            joho_phase = []
             for i in range(len(w_array)):
                 row = []
+                row_peak = []
+                row_phase = []
                 for j in range(len(n_array)):
                     row.append(nwsowa[i,j])
+                    row_peak.append(nwpeak[i,j])
+                    row_phase.append(nwphase[i,j])
                 joho.append(row)
+                joho_peak.append(row_peak)
+                joho_phase.append(row_phase)
+            joho_peak.insert(0,x)
+            joho_phase.insert(0,x)
             joho.insert(0,x)
             joho.insert(1,ave)
             joho.insert(2,std)
@@ -533,15 +522,25 @@ if __name__ == "__main__":
             joho.insert(7,ander_box)
             joho.insert(8,ander_boxcox)
             df = pd.DataFrame(joho)
+            df_peak = pd.DataFrame(joho_peak)
+            df_phase = pd.DataFrame(joho_phase)
             new_index = ['針数', '平均張力', '標準偏差','歪度', '尖度', 'shapiro', 'boxcox_shap', 'anderson', 'boxcox_ander'] + [str(i) + 'ワーク目' for i in range(1, len(df)+1)]
+            new_index_p = ['針数'] + [str(i) + 'ワーク目' for i in range(1, len(df)+1)]
             df.index = new_index[:len(df.index)]  # 新しいインデックスを設定する
+            df_peak.index = new_index_p[:len(df_peak.index)]
+            df_phase.index = new_index_p[:len(df_phase.index)]
 
             k = st.number_input('閾値係数k（青：閾値より小さい　赤：閾値より大きい）', value=3.0)
             upper_threshold = ave + (std * k)
             lower_threshold = ave - (std * k)
             styled_df = df.style.apply(lambda x: [func.color_by_threshold(val, upper_threshold[x.name], lower_threshold[x.name]) for val in x])
+            # データ一覧
             with st.expander("### データ一覧", expanded=False):
                 st.write(styled_df)
+            # ピーク張力と位相
+            with st.expander("### ピーク張力と位相", expanded=False):
+                st.write(df_peak)
+                st.write(df_phase)
 
             # csv出力
             csv_data = df.to_csv(index=False)
@@ -549,6 +548,20 @@ if __name__ == "__main__":
                 label="CSVファイルをダウンロード",
                 data=csv_data,
                 file_name='data.csv',
+                mime='text/csv'
+            )
+            csv_data_peak = df_peak.to_csv(index=False)
+            st.download_button(
+                label="peak張力のCSVファイルをダウンロード",
+                data=csv_data_peak,
+                file_name='data_peak.csv',
+                mime='text/csv'
+            )
+            csv_data_phase = df_phase.to_csv(index=False)
+            st.download_button(
+                label="peak位相のCSVファイルをダウンロード",
+                data=csv_data_phase,
+                file_name='data_phase.csv',
                 mime='text/csv'
             )
 
