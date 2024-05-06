@@ -1,4 +1,4 @@
-#v040 データアップのサイドバー化
+#v041 外れ値解析追加
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -7,7 +7,7 @@ import plotly.express as px
 from scipy.stats import skew, kurtosis, anderson, shapiro, boxcox
 import func
 
-footer_text = "Ver.0.40"
+footer_text = "Ver.0.41"
 
 st.markdown(
     f"""
@@ -41,7 +41,7 @@ st.header("SDD LOG解析", divider='red')
 kishu = ['小型BAS','大型BAS','全回転BAS','BUF','DA',7300]
 jikan = ['1us', '1ms', '333ns']
 options = ['糸切れ','目飛び','締り1','締り2','締り3']
-tab1, tab2, tab3, tab4 = st.tabs(["張力解析", "ワーク間解析", "データ整理", "3Dグラフ"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["張力解析", "ワーク間解析", "データ整理", "3Dグラフ", "外れ値解析"])
 
 with st.sidebar:
     st.write("### ▼データアップロード")
@@ -307,8 +307,10 @@ if __name__ == "__main__":
                     w_dend = st.number_input('出会い終了位相.', value=d_ed)
                     st.markdown(f"<span style='font-size: 12px;'>換算</span> {w_dend * 1.40625}°", unsafe_allow_html=True)
 
-            w_num = st.number_input(f'合算時ワーク数を設定してください。アップロード中の総ワーク数：{len(w_array)}', min_value=1, step=1, value=50)
-            input_nd = st.number_input(f'何針目を解析しますか？  最大針数：{len(n_array)}針', min_value=1, max_value=len(n_array) , step=1)
+            with st.expander("### ワークと針数設定", expanded=False):
+                w_num = st.number_input(f'合算時ワーク数を設定してください。アップロード中の総ワーク数：{len(w_array)}', min_value=1, step=1, value=50)
+                input_nd = st.number_input(f'何針目を解析しますか？  最大針数：{len(n_array)}針', min_value=1, max_value=len(n_array) , step=1)
+
             nd = input_nd - 1
             ndsowa = np.arange(len(w_array))  # 各ワークのnd針目の総和値を入れる配列を作成
             for n in range(len(w_array)):  # 指定区間の総和値をsowa配列に保存する
@@ -680,3 +682,114 @@ if __name__ == "__main__":
             fig13 = go.Figure(data=data13, layout=layout13)
             # フィギュアの表示
             st.plotly_chart(fig13, use_container_width=True)
+
+        else:
+            st.write('### データをアップロードしてください')
+
+    with tab5:
+        if uploaded_files:
+            with st.expander("### 区間設定", expanded=False):
+                st.write("解析する張力総和区間を設定してください")
+                col1, col2 = st.columns(2)
+                with col1:
+                    w_stt = st.number_input('開始位相_', value=ten_st)
+                    st.markdown(f"<span style='font-size: 12px;'>換算</span> {w_stt * 1.40625}°", unsafe_allow_html=True)  #カウント数を角度に換算
+                with col2:
+                    w_end = st.number_input('終了位相_', value=ten_ed)
+                    st.markdown(f"<span style='font-size: 12px;'>換算</span> {w_end * 1.40625}°", unsafe_allow_html=True)
+                st.write("出会い張力総和区間を設定してください")
+                col3, col4 = st.columns(2)
+                with col3:
+                    w_dstt = st.number_input('出会い開始位相_', value=d_st)
+                    st.markdown(f"<span style='font-size: 12px;'>換算</span> {w_dstt * 1.40625}°", unsafe_allow_html=True)
+                with col4:
+                    w_dend = st.number_input('出会い終了位相_', value=d_ed)
+                    st.markdown(f"<span style='font-size: 12px;'>換算</span> {w_dend * 1.40625}°", unsafe_allow_html=True)
+
+            with st.expander("### 閾値設定", expanded=False):
+                w_num = st.number_input(f'合算ワーク数設定。アップロード中の総ワーク数：{len(w_array)}', min_value=1, step=1, value=50)
+                input_nd = st.number_input(f'解析する針数設定。  最大針数：{len(n_array)}針', min_value=1, max_value=len(n_array) , step=1)
+                k_s = st.number_input('k設定', value=4.0)
+                st.write("表示したい閾値を選択してください")
+                first = st.checkbox(f'最初{w_num}ワークのσ({k_s}倍)', key='-first-')
+                move = st.checkbox(f'{w_num}ワークの移動σ({k_s}倍)', key='-move-')
+                total = st.checkbox(f'合算σ({k_s}倍)', key='-total-')
+
+            # 最初のσでの閾値算出
+            std_first = np.std(ndsowa[0:0+w_num])
+            ave_first = np.mean(ndsowa[0:0+w_num])
+            first_list = []
+            first_list_m = []
+            for i in range(len(w_array)):
+                first_s = ave_first + std_first*k_s  # 平均+kσ
+                first_s_m = ave_first - std_first*k_s
+                first_list.append(first_s)
+                first_list_m.append(first_s_m)
+            # 移動σでの閾値算出
+            move_list = []
+            move_list_m = []
+            for i in range(len(w_array)-w_num):
+                move_s = np.mean(ndsowa[i:i+w_num]) + np.std(ndsowa[i:i+w_num]) * k_s
+                move_s_m = np.mean(ndsowa[i:i+w_num]) - np.std(ndsowa[i:i+w_num]) * k_s
+                move_list.append(move_s)
+                move_list_m.append(move_s_m)
+            # 合算σでの閾値算出
+            total_s = []
+            total_a = []
+            total_list = []
+            total_list_m = []
+            for i in range(w_num,len(w_array)):
+                if i % w_num == 0:
+                    std = np.std(ndsowa[i-w_num:i-1])  # 標準偏差を計算
+                    ave = np.mean(ndsowa[i-w_num:i-1])  # 平均値を計算
+                    total_a.append(ave)
+                    if total_s:
+                        last_std = total_s[-1]
+                        gstd = (last_std + std)*0.5
+                        total_s.append(gstd)
+                    else:
+                        total_s.append(std)  # 最初の場合はそのまま追加
+                else:
+                    last_std = total_s[-1]
+                    total_s.append(last_std)
+                    total_a.append(ave)
+            for i in range(len(w_array)-w_num):
+                total_lists = total_a[i] + total_s[i] * k_s
+                total_lists_m = total_a[i] - total_s[i] * k_s
+                total_list.append(total_lists)
+                total_list_m.append(total_lists_m)
+
+            data15 = go.Scatter(x=xw+1, y=first_list, mode='lines', line=dict(color="#FF00FF"),  name='first_σ'.format(i))
+            data16 = go.Scatter(x=xw+1+w_num, y=move_list, mode='lines', line=dict(color="#FF0011"),  name='move_σ'.format(i))
+            data17 = go.Scatter(x=xw+1+w_num, y=total_list, mode='lines', line=dict(color="#2200FF"),  name='tootal_σ'.format(i))
+            data15_m = go.Scatter(x=xw+1, y=first_list_m, mode='lines', line=dict(color="#FF00FF"),  name='-first_σ'.format(i))
+            data16_m = go.Scatter(x=xw+1+w_num, y=move_list_m, mode='lines', line=dict(color="#FF0011"),  name='-move_σ'.format(i))
+            data17_m = go.Scatter(x=xw+1+w_num, y=total_list_m, mode='lines', line=dict(color="#2200FF"),  name='-tootal_σ'.format(i))
+
+            # レイアウトの作成
+            layout15 = go.Layout(
+                title='分析波形',
+                xaxis=dict(title='Work Count'),
+                yaxis=dict(title='Section Tension'),
+                showlegend=True
+            )
+            # data_sに選択された波形データを格納
+            data_s = []
+            data_s.extend([data8])
+            if first == True:
+                data_s.extend([data15])
+                data_s.extend([data15_m])
+            if move == True:
+                data_s.extend([data16])
+                data_s.extend([data16_m])
+            if total == True:
+                data_s.extend([data17])
+                data_s.extend([data17_m])
+            
+            # フィギュアの作成
+            fig_s = go.Figure(data=data_s, layout=layout15)
+            # フィギュアの表示
+            st.plotly_chart(fig_s, use_container_width=True)
+
+        else:
+            st.write('### データをアップロードしてください')
